@@ -1,0 +1,79 @@
+#!/bin/sh
+
+set -e
+
+HEADER="# This file is generated and maintaned by envy. Use envy install to add new packages"
+ORIGINAL_ENV=$VIRTUAL_ENV
+
+aws codeartifact login --tool pip --repository nai --domain nai --domain-owner 759548107689
+
+if [ -d ".venv" ]
+then
+    source .venv/bin/activate
+else
+  PYTHON="python3"
+  echo "Creating new venv at .venv"
+  $PYTHON -m venv .venv
+  source .venv/bin/activate
+  pip install --upgrade pip
+fi
+
+if [ ! $# -eq 0 ]
+then
+  if [ $1 == "install" ]
+  then
+    if [ $# -eq 1 ]
+    then
+      echo "ERROR: expected something to install, e.g. envy install pandas"
+      exit 1
+    fi
+
+    echo "Installing ${@:2}"
+    pip install "${@:2}"
+    for requirement in "${@:2}"
+    do
+      echo "\n$requirement" >> requirements.base.txt
+    done
+    echo $HEADER > requirements.base.txt.temp
+    sort requirements.base.txt | uniq >> requirements.base.txt.temp
+    rm requirements.base.txt
+    mv requirements.base.txt.temp requirements.base.txt
+  elif [ $1 == "update" ]
+  then
+    echo "Updating $2"
+    pip install -U $2
+  else
+    echo "ERROR: unknown command \"$1\""
+    exit 1
+  fi
+elif [ -f "./requirements.txt" ]
+then
+  echo "We found a requirements.txt, installing packages..."
+  pip install -r requirements.txt
+  if [ ! -f "./requirements.base.txt" ]
+  then
+    echo "We didn't find a requirements.base.txt. Will create one based off requirements.txt..."
+    mv requirements.txt requirements.base.txt
+  fi
+else
+  if [ -f "./requirements.base.txt" ]
+  then
+    echo "We found a requirements.base.txt, installing pacakges.."
+    pip install -r requirements.base.txt
+  else
+    echo "Found no requirements files. We'll create them for you"
+    echo $HEADER > requirements.base.txt
+  fi
+fi
+
+echo $HEADER > requirements.txt
+pip freeze >> requirements.txt
+
+if [[ ! $ORIGINAL_ENV -ef ./.venv ]]
+then
+  echo ""
+  echo "Don't forget to activate the environment!"
+  echo ""
+  echo "  source .venv/bin/activate"
+  echo ""
+fi
